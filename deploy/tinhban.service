@@ -1,0 +1,38 @@
+[Unit]
+Description=Tinh Ban — toolkit tu vi ca nhan (self-hosted)
+Documentation=https://github.com/QinZinn/TinhBan
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# >>> CAN CHINH KHI DEPLOY <<<
+# Duong dan den binary release (ket qua `cargo build --release`).
+# Build len server (hoac tren may dev roi copy sang): chinh lai cho dung.
+ExecStart=/opt/tinhban/bin/tinhban-api
+
+# File environment tren server (KHONG commit vao repo). Chua: DATABASE_URL, PORT, IP, RUST_LOG.
+EnvironmentFile=/etc/tinhban/tinhban.env
+
+# Neu muon chay duoi user rieng (de tranh chay root):
+#   sudo useradd -r -s /usr/sbin/nologin -d /var/lib/tinhban tinhban
+# roi bo comment cac dong duoi va chinh lon DATABASE_URL cho vao thu muc user do.
+# User=tinhban
+# Group=tinhban
+# WorkingDirectory=/var/lib/tinhban
+# ReadWritePaths=/var/lib/tinhban
+
+# Gin gin: chi ghi vao noi luu DB, ra stdout (journald thu).
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
+
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

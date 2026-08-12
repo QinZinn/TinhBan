@@ -1,0 +1,45 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/tinhban-core",
+    "crates/tinhban-db",
+    "crates/tinhban-api",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/QinZinn/TinhBan"
+
+[workspace.dependencies]
+tinhban-core = { path = "crates/tinhban-core" }
+tinhban-db = { path = "crates/tinhban-db" }
+
+# SQLite-only sqlx: no TLS, bundled libsqlite3 (self-contained release binary).
+# Note: building requires a C compiler (cc) because of the bundled SQLite.
+sqlx = { version = "0.9", default-features = false, features = [
+    "runtime-tokio",
+    "sqlite",
+    "migrate",
+    "macros",
+    "tls-none",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tower = { version = "0.5", default-features = false }
+tower-http = { version = "0.7", default-features = false, features = [
+    "cors",
+    "trace",
+] }
+dotenvy = "0.15"
+
+# Release profile tuned for a low-resource homeserver single-binary deployment.
+[profile.release]
+opt-level = 2
+lto = "thin"
+codegen-units = 1
+strip = true
+panic = "abort"

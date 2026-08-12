@@ -1,0 +1,27 @@
+[package]
+name = "tinhban-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+tinhban-core = { workspace = true }
+tinhban-db = { workspace = true }
+dioxus = { version = "0.7", features = ["fullstack"] }
+sqlx = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+dotenvy = { workspace = true }
+
+[features]
+# SSR-only mặc định: build native, chạy 1 binary, không cần wasm target/dx CLI.
+default = ["server"]
+server = ["dioxus/server"]
+# `web` để dành cho tương lai khi muốn thêm client hydration (cần `dx` CLI + wasm32
+# target, và phải chuyển các server-only deps sang optional — xem README).
+web = ["dioxus/web"]
