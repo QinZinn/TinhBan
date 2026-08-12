@@ -60,7 +60,7 @@ async fn get_health() -> Result<HealthStatus, HttpError> {
 /// Trang chủ: SSR-render tên app + trạng thái backend (gọi `/api/health`).
 #[component]
 fn Home() -> Element {
-    let health = use_loader(|| get_health())?.read().clone();
+    let health = use_loader(get_health)?.read().clone();
 
     rsx! {
         div { style: "font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 1rem;",
