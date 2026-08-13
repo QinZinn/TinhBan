@@ -77,7 +77,7 @@ impl HeavenlyStem {
 /// Đánh tên `Ty2` cho chi "Tỵ" (snake, miền Nam Việt Nam hay đọc "Tí" / Tỵ)
 /// để tránh trùng `Ty` (Tý = rat, index 0). Quy ước này theo gợi ý của spec
 /// giai đoạn 2.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum EarthlyBranch {
     Ty = 0,

@@ -33,11 +33,18 @@ use std::f64::consts::PI;
 mod astronomy;
 mod canchi;
 mod error;
+pub mod tuvi;
 
 pub use canchi::{EarthlyBranch, HeavenlyStem, NguHanh, NguHanhElement};
 pub use error::LunarError;
 
 pub use canchi::{can_chi_display, nguhanh_of_branch, nguhanh_of_stem};
+
+// Tử Vi re-exports cho ergonomic API (tinhban-core::lap_la_so, TuViChart, ...).
+pub use tuvi::{
+    lap_la_so, Cuc, CucInfo, Gender, Palace, PalaceName, Sao, SaoCategory,
+    TruongSinhState, TuViChart, TuViError,
+};
 
 // ===========================================================================
 // App constants (back-compat từ giai đoạn 1, dùng cho `tinhban-api`).
