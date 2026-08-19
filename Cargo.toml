@@ -36,6 +36,14 @@ tower-http = { version = "0.7", default-features = false, features = [
 ] }
 dotenvy = "0.15"
 
+# Scrape licham365.vn (giai đoạn 5). `rustls-tls` thay vì native-tls để binary
+# không phụ thuộc OpenSSL của hệ thống — hợp với kiểu deploy "copy 1 file + systemd".
+reqwest = { version = "0.12", default-features = false, features = [
+    "rustls-tls",
+    "gzip",
+] }
+scraper = "0.20"
+
 # Release profile tuned for a low-resource homeserver single-binary deployment.
 [profile.release]
 opt-level = 2

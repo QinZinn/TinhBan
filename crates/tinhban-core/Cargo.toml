@@ -10,3 +10,10 @@ chrono = { version = "0.4", default-features = false, features = [
     "clock",
     "std",
 ] }
+# Optional: chỉ bật khi crate tiêu thụ cần serialize (tinhban-api bật để trả
+# JSON). Mặc định tắt để lõi nghiệp vụ không kéo theo dependency nào ngoài chrono.
+serde = { workspace = true, optional = true }
+
+[features]
+default = []
+serde = ["dep:serde", "chrono/serde"]

@@ -34,6 +34,7 @@ mod astronomy;
 mod canchi;
 mod error;
 pub mod bat_tu;
+pub mod trach_nhat;
 pub mod tuvi;
 
 pub use canchi::{EarthlyBranch, HeavenlyStem, NguHanh, NguHanhElement};
@@ -45,6 +46,12 @@ pub use canchi::{can_chi_display, nguhanh_of_branch, nguhanh_of_stem};
 pub use tuvi::{
     lap_la_so, Cuc, CucInfo, Gender, Palace, PalaceName, Sao, SaoCategory,
     TruongSinhState, TuViChart, TuViError,
+};
+
+// Trạch Nhật (giai đoạn 5) re-exports.
+pub use trach_nhat::{
+    danh_gia_khoang, danh_gia_ngay, DayAssessment, HoangDaoHacDao, HourRange, KiengKy,
+    ThanSat, Truc, TrucRating,
 };
 
 // Bát Tự re-exports cho ergonomic API. Lưu ý `Gender` ở đây là cùng enum với
@@ -77,6 +84,7 @@ pub fn version() -> &'static str {
 
 /// Ngày âm lịch dạng có cấu trúc.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LunarDate {
     /// Ngày âm (1–30).
     pub day: u8,
@@ -92,6 +100,7 @@ pub struct LunarDate {
 
 /// Cặp Can–Chi (Thiên Can × Địa Chi). Ví dụ năm 2024 → Giáp Thìn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CanChi {
     pub stem: HeavenlyStem,
     pub branch: EarthlyBranch,

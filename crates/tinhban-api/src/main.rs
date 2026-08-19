@@ -11,12 +11,18 @@
 //!  - `GET /health`        -> `{"status":"ok"}`        (healthcheck cho systemd)
 //!  - `GET /api/health`    -> chi tiết + check DB       (server fn, frontend gọi)
 //!  - `GET /api/version`   -> `{"name","version"}`
+//!  - `GET /api/ngay-tot-xau?date=YYYY-MM-DD` -> ngày tốt/xấu (giai đoạn 5)
 //!
 //! PORT/IP bind do Dioxus (`dioxus::serve`) đọc từ môi trường; mặc định 8080.
 
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use tinhban_core::{app_name, version};
+
+#[cfg(feature = "server")]
+mod ngay_tot_xau;
+#[cfg(feature = "server")]
+mod scrape;
 
 #[cfg(feature = "server")]
 use dioxus::fullstack::Lazy;
@@ -31,6 +37,13 @@ static DB: Lazy<sqlx::SqlitePool> = Lazy::new(|| async move {
     let pool = tinhban_db::init_and_migrate(&url).await?;
     tracing::info!("database ready");
     Ok::<sqlx::SqlitePool, sqlx::Error>(pool)
+});
+
+/// HTTP client dùng chung cho scrape. Tạo một lần để tái dùng connection pool
+/// + DNS cache; tạo mới mỗi request là lãng phí và dễ cạn socket.
+#[cfg(feature = "server")]
+static HTTP: Lazy<reqwest::Client> = Lazy::new(|| async move {
+    scrape::licham365::build_client()
 });
 
 // PartialEq + Deserialize cần cho codec server fn + `use_loader`.
@@ -77,7 +90,7 @@ fn Home() -> Element {
             }
 
             p { style: "color:#666; font-size:0.9rem;",
-                "Endpoints: GET /health · GET /api/health · GET /api/version"
+                "Endpoints: GET /health · GET /api/health · GET /api/version · GET /api/ngay-tot-xau?date=YYYY-MM-DD"
             }
         }
     }
@@ -134,6 +147,7 @@ fn main() {
         let router = dioxus::server::router(app)
             .route("/health", get(health_handler))
             .route("/api/version", get(version_handler))
+            .route("/api/ngay-tot-xau", get(ngay_tot_xau_handler))
             .layer(TraceLayer::new_for_http())
             .layer(CorsLayer::very_permissive());
 
@@ -152,4 +166,61 @@ async fn version_handler() -> dioxus::server::axum::Json<serde_json::Value> {
         "name": tinhban_core::app_name(),
         "version": tinhban_core::version(),
     }))
+}
+
+/// `GET /api/ngay-tot-xau?date=YYYY-MM-DD`
+///
+/// `date` không bắt buộc — thiếu thì lấy **hôm nay theo giờ Việt Nam** (không
+/// phải giờ hệ thống: server có thể chạy UTC, nhưng lịch âm luôn tính theo UTC+7).
+///
+/// Mã trạng thái:
+///  - `200` — thành công (kể cả khi phần diễn giải scrape hỏng: khi đó
+///    `dien_giai` là `null` và `ghi_chu` giải thích lý do);
+///  - `400` — `date` sai định dạng hoặc ngoài phạm vi 1900–2100.
+///
+/// Nguồn phụ hỏng KHÔNG bao giờ thành 5xx — đó là chủ ý thiết kế.
+#[cfg(feature = "server")]
+async fn ngay_tot_xau_handler(
+    dioxus::server::axum::extract::Query(q): dioxus::server::axum::extract::Query<
+        NgayTotXauQuery,
+    >,
+) -> Result<
+    dioxus::server::axum::Json<ngay_tot_xau::NgayTotXauResponse>,
+    (
+        dioxus::server::axum::http::StatusCode,
+        dioxus::server::axum::Json<serde_json::Value>,
+    ),
+> {
+    use dioxus::server::axum::http::StatusCode;
+    use dioxus::server::axum::Json;
+
+    let bad = |msg: String| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": msg })),
+        )
+    };
+
+    let date = match q.date.as_deref() {
+        Some(s) => chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|_| {
+            bad(format!(
+                "tham số `date` không hợp lệ: {s:?} — cần định dạng YYYY-MM-DD"
+            ))
+        })?,
+        // Hôm nay theo giờ VN (UTC+7), không theo timezone của máy chủ.
+        None => (chrono::Utc::now() + chrono::Duration::hours(7)).date_naive(),
+    };
+
+    match ngay_tot_xau::xem_ngay(&DB, &HTTP, date).await {
+        Ok(r) => Ok(Json(r)),
+        Err(e) => Err(bad(e.to_string())),
+    }
+}
+
+/// Query string của `/api/ngay-tot-xau`.
+#[cfg(feature = "server")]
+#[derive(Debug, Deserialize)]
+struct NgayTotXauQuery {
+    /// `YYYY-MM-DD`. Thiếu → hôm nay theo giờ VN.
+    date: Option<String>,
 }

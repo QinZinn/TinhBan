@@ -18,6 +18,7 @@ use crate::CanChi;
 
 /// 10 Thiên Can (Heavenly Stems). Thứ tự cố định, index 0..9.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum HeavenlyStem {
     Giap = 0,
@@ -78,6 +79,7 @@ impl HeavenlyStem {
 /// để tránh trùng `Ty` (Tý = rat, index 0). Quy ước này theo gợi ý của spec
 /// giai đoạn 2.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum EarthlyBranch {
     Ty = 0,
@@ -140,6 +142,7 @@ impl EarthlyBranch {
 
 /// Ngũ Hành (Five Elements).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum NguHanh {
     Kim,
     Moc,
