@@ -102,6 +102,40 @@ tự chạy trên server.
 - **Bundled SQLite**: build cần `cc`; binary release tự chứa SQLite (server
   không cần cài libsqlite3).
 
+## Ghi chú hồi tố: Bug #7 (epoch sai) — ảnh hưởng ngược tới giai đoạn 4
+
+Trong lúc làm giai đoạn 5, phát hiện hằng số epoch sai trong
+`sun_longitude_deg_at_local_midnight` (`crates/tinhban-core/src/astronomy.rs`):
+hàm đã trừ 0.5 ngày ở `real_jd` rồi lại dùng epoch `2451545.5` vốn **đã gộp sẵn**
+nửa ngày đó → double-count → kinh độ Mặt Trời thấp hơn thực tế ~0.49°.
+
+**Hàm này không phải code của giai đoạn 5** — nó được viết ra và dùng lần đầu ở
+giai đoạn 4 (`bat_tu/tiet_khi.rs`), nơi nó quyết định ranh giới Lập Xuân (trụ
+Năm) và ranh giới 12 tháng tiết khí (trụ Tháng). Báo cáo giai đoạn 4 khi đó có
+ghi nhận triệu chứng nhưng quy nhầm cho "giới hạn độ chính xác của đa thức Hồ
+Ngọc Đức". Đã audit lại toàn bộ trước khi commit giai đoạn 5.
+
+| Câu hỏi | Kết luận |
+|---|---|
+| Chiều sai | Mốc tiết khí bị đẩy **TRỄ**, một chiều tuyệt đối. Trên 1900–2100 (2412 mốc): **50.0% trễ 1 ngày, 0 mốc sớm**. |
+| Ai bị ảnh hưởng | **Bát Tự** (trụ Năm + trụ Tháng) và **12 Trực** của giai đoạn 5. |
+| Ai KHÔNG bị | **Tử Vi** — chỉ dùng ngày Âm lịch, đi qua `sun_longitude_at_noon` (nhánh epoch đúng). Khoá bằng 2 test. |
+| **Lịch Âm** có bị không | **Không** — `solar_to_lunar` dùng nhánh đúng. |
+| Lá số Bát Tự sai bao nhiêu | Quét 1960–2030 (25 933 ngày): **35 ngày sai trụ Năm** (0.135%), **389 ngày sai trụ Tháng** (1.50%) → tổng **1.635%**. |
+| Vùng rủi ro trụ Năm | Đúng ngày **3/2 hoặc 4/2** của 35 năm cụ thể (xem README `bat_tu/`) — lệch hẳn sang năm Can Chi liền trước. |
+| Kiểm chứng bản sửa | Đối chiếu **Đài Thiên văn Hồng Kông**, 16 năm × 12 tiết, đã quy giờ HK→VN: **192/192 (100%)** sau khi sửa, 97/192 trước khi sửa. |
+| 7 case Bát Tự cũ | **0/7 bị ảnh hưởng — nhưng nhờ may, không phải thiết kế**: case5 (2000-05-05) nằm ĐÚNG trên mốc Lập Hạ, chỉ thoát vì mốc đó tình cờ thuộc nửa không bị lệch. |
+| Đã bổ sung | **11 case biên** nhắm thẳng vùng rủi ro; **8/11 case bị mã cũ tính sai**. |
+| **Rủi ro thực tế** | **Bằng 0** — chưa có tầng lưu lá số (`tinhban-db` cho hồ sơ dự kiến giai đoạn 6), nên chưa lá số nào từng được tạo bằng mã lỗi. |
+
+Chi tiết đầy đủ (bảng số liệu, danh sách 35 năm rủi ro, từng case biên):
+[`crates/tinhban-core/src/bat_tu/README.md`](crates/tinhban-core/src/bat_tu/README.md#ghi-chú-hồi-tố-audit-bug-7-epoch-sai--ảnh-hưởng-ngược-tới-giai-đoạn-4).
+Bằng chứng chạy được: [`crates/tinhban-core/tests/bug7_epoch_audit.rs`](crates/tinhban-core/tests/bug7_epoch_audit.rs).
+
+> ⚠️ `sun_longitude_at_noon` dùng `2451545.5` là **đúng** — ở đó shift −0.5 được
+> gộp thẳng vào hằng số. Hai hàm khác nhau ở chỗ đó, **đừng "đồng bộ" hằng số
+> giữa chúng**.
+
 ## Roadmap (giai đoạn sau)
 - `tinhban-core`: lịch âm, an sao Tử Vi Đẩu Số, Bát Tự, từ điển, xem ngày.
 - `tinhban-db`: bảng hồ sơ người được xem + lá số, cache ngày tốt/xấu.

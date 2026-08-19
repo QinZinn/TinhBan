@@ -120,15 +120,28 @@ pub(crate) fn sun_longitude_at_noon(jdn: i64, time_zone: f64) -> f64 {
 /// Kính độ Mặt Trời tại 00:00 VN local của JD nguyên `jdn` (Ho's convention:
 /// local midnight start-of-VN-day D = `jdn - 0.5 - tz/24`). Trả về độ [0, 360),
 /// công thức theo Ho's NEW `getSunLongitude` với hiệu chỉnh nutation (omega
-/// term) và epoch 2451545.5.
+/// term), epoch J2000.0 = **2451545.0**.
 ///
-/// Bug từng gặp: phiên bản đầu double-convert (deg→rad→deg) → kết quả luôn ở
+/// Bug từng gặp #1: phiên bản đầu double-convert (deg→rad→deg) → kết quả luôn ở
 /// 0-5° cho mọi ngày trong năm → `find_tiet_khi_jd` không tìm thấy transition.
 /// Fixed: chỉ convert 1 lần (dr = π/180), normalize trong deg [0, 360).
+///
+/// Bug từng gặp #2 (giai đoạn 5): hằng số epoch dùng `2451545.5` **trong khi**
+/// `real_jd` ĐÃ trừ 0.5 ở dòng trên → double-count 0.5 ngày → kinh độ thấp hơn
+/// thực tế ~0.49° → mọi tiết khí bị đẩy trễ ~0.5 ngày, khiến ~50% mốc tiết khí
+/// lệch đúng 1 ngày (đây chính là "±1 ngày do độ chính xác Ho" mà giai đoạn 4
+/// ghi nhận — thực ra là bug hằng số, không phải giới hạn thuật toán).
+///
+/// So sánh: `sun_longitude_at_noon` ở trên dùng `2451545.5` là ĐÚNG, vì ở đó
+/// shift -0.5 được gộp thẳng vào hằng số (`jdn - 2451545.5 - tz/24`) chứ không
+/// trừ riêng. Hai hàm khác nhau ở chỗ đó — đừng "đồng bộ" hằng số giữa chúng.
+///
+/// Sau khi sửa: 24/24 tiết khí năm 2024 và 10/10 mốc Lập Xuân 2017–2026 khớp
+/// đúng ngày với lịch vạn niên (kiểm chứng ở `tiet_khi.rs` tests).
 #[allow(clippy::excessive_precision)]
 pub(crate) fn sun_longitude_deg_at_local_midnight(jdn: i64, time_zone: f64) -> f64 {
     let real_jd = jdn as f64 - 0.5 - time_zone / 24.0;
-    let t = (real_jd - 2451545.5) / 36525.0;
+    let t = (real_jd - 2451545.0) / 36525.0;
     let t2 = t * t;
     let dr = PI / 180.0;
     let m = 357.52910 + 35999.05030 * t - 0.0001559 * t2 - 0.00000048 * t * t2;

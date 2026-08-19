@@ -176,6 +176,27 @@ hợp sóc rơi trúng rất sát midnight VN có thể bị làm tròn sai 1 ng
 khoảng 1900–2100 này, những trường này đã được "liệt kê" trong `TET_CASES` (là
 2007 và 2030 — đã xử lý đúng với timezone UTC+7 theo công thức chuẩn).
 
+**Đo định lượng (giai đoạn 5).** Đối chiếu ngày Âm lịch với licham365.vn trên
+**20 tháng** rải từ 1995 đến 2030 (**602 ngày**): khớp **602/602**. Ngoài tập đó,
+đã tìm được đúng một ca sai trong thực tế: **tháng 7/2026**, do sóc rơi lúc 00:46
+giờ VN ngày 13/8/2026 (nhật thực toàn phần 12/8/2026 lúc 17:46 UTC) — đa thức
+xếp mùng 1 vào 12/8 thay vì 13/8. Đây đúng là kiểu ca "sóc sát nửa đêm" mô tả ở
+trên; sửa triệt để cần lý thuyết Mặt Trăng độ chính xác cao hơn hẳn, nằm ngoài
+phạm vi thuật toán Hồ Ngọc Đức.
+
+### Về kinh độ Mặt Trời / tiết khí
+
+Hàm `sun_longitude_deg_at_local_midnight` từng có **bug hằng số epoch** (dùng
+`2451545.5` trong khi đã trừ 0.5 ngày riêng → double-count nửa ngày), làm ~50%
+mốc tiết khí lệch 1 ngày. Giai đoạn 4 quy nhầm triệu chứng này cho giới hạn độ
+chính xác của đa thức; giai đoạn 5 truy ra và sửa (`2451545.5` → `2451545.0`).
+
+Sau khi sửa: **24/24** tiết khí năm 2024 và **10/10** mốc Lập Xuân 2017–2026 khớp
+đúng ngày với lịch vạn niên. Có test regression trong `bat_tu/tiet_khi.rs`.
+
+> ⚠️ `sun_longitude_at_noon` dùng `2451545.5` là **đúng** — ở đó shift −0.5 được
+> gộp thẳng vào hằng số. Đừng "đồng bộ" hằng số giữa hai hàm.
+
 ### Sự khác biệt với lịch TQ
 
 Sự khác biệt VN–TQ chỉ phát sinh ở khoảng 1–2 năm / thế kỷ, do múi giờ khác.
@@ -230,5 +251,8 @@ assert_eq!(can_chi_display(y), "Giáp Thìn");
   tinh + phụ tinh.
 - Tứ Trụ Bát Tự (giai đoạn 4) sẽ dùng `BirthMoment`, `year_can_chi`,
   `month_can_chi`, `day_can_chi`, `hour_can_chi` để lập 4 trụ.
-- Logic luận ngày tốt/xấu (giai đoạn 5) sẽ dùng dữ liệu ngày + Can Chi làm nền
+- Logic luận ngày tốt/xấu (giai đoạn 5) — **đã xong**, xem
+  [`src/trach_nhat/README.md`](src/trach_nhat/README.md). Dùng `solar_to_lunar`,
+  `day_can_chi`, `month_can_chi`, `year_can_chi` và module tiết khí của
+  `bat_tu` làm nền
   cho các quy tắc hoàng đạo/hắc đạo, trực/từ/bại/khung...

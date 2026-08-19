@@ -57,7 +57,10 @@ pub mod types;
 
 pub use hidden_stems::hidden_stems;
 pub use thap_than::{TenGod, ten_god_of};
-pub use tiet_khi::{TIET_KHI_TABLE, find_tiet_khi_jd, lap_xuan_jd, tiet_khi_jds_of_bt_year};
+pub use tiet_khi::{
+    TIET_KHI_24, TIET_KHI_TABLE, current_tiet_khi, find_tiet_khi_jd, lap_xuan_jd,
+    tiet_khi_jds_of_bt_year, tiet_month_branch_index, tiet_month_index,
+};
 pub use types::{BatTuChart, BatTuError, Gender, NguHanhCount, Pillar};
 
 use crate::{
