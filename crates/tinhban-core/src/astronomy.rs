@@ -100,7 +100,7 @@ fn new_moon(k: i64) -> f64 {
 /// 2004). Phiên bản này bất biến để match các port `vanng822/ramlich`,
 /// `kunkka19xx/lunar` và prototype Python nội bộ (đã đối chiếu).
 #[allow(clippy::excessive_precision)]
-fn sun_longitude_at_noon(jdn: i64, time_zone: f64) -> f64 {
+pub(crate) fn sun_longitude_at_noon(jdn: i64, time_zone: f64) -> f64 {
     let t = (jdn as f64 - 2451545.5 - time_zone / 24.0) / 36525.0;
     let t2 = t * t;
     let dr = PI / 180.0;
@@ -116,6 +116,31 @@ fn sun_longitude_at_noon(jdn: i64, time_zone: f64) -> f64 {
     // Normalize to [0, 2*pi).
     l_rad - 2.0 * PI * (l_rad / (2.0 * PI)).floor()
 }
+
+/// Kính độ Mặt Trời tại 00:00 VN local của JD nguyên `jdn` (Ho's convention:
+/// local midnight start-of-VN-day D = `jdn - 0.5 - tz/24`). Trả về độ [0, 360),
+/// công thức theo Ho's NEW `getSunLongitude` với hiệu chỉnh nutation (omega
+/// term) và epoch 2451545.5.
+///
+/// Bug từng gặp: phiên bản đầu double-convert (deg→rad→deg) → kết quả luôn ở
+/// 0-5° cho mọi ngày trong năm → `find_tiet_khi_jd` không tìm thấy transition.
+/// Fixed: chỉ convert 1 lần (dr = π/180), normalize trong deg [0, 360).
+#[allow(clippy::excessive_precision)]
+pub(crate) fn sun_longitude_deg_at_local_midnight(jdn: i64, time_zone: f64) -> f64 {
+    let real_jd = jdn as f64 - 0.5 - time_zone / 24.0;
+    let t = (real_jd - 2451545.5) / 36525.0;
+    let t2 = t * t;
+    let dr = PI / 180.0;
+    let m = 357.52910 + 35999.05030 * t - 0.0001559 * t2 - 0.00000048 * t * t2;
+    let l0 = 280.46645 + 36000.76983 * t + 0.0003032 * t2;
+    let mut dl = (1.914600 - 0.004817 * t - 0.000014 * t2) * (dr * m).sin();
+    dl += (0.019993 - 0.000101 * t) * (dr * 2.0 * m).sin() + 0.000290 * (dr * 3.0 * m).sin();
+    let mut l_deg = l0 + dl;
+    let omega = 125.04 - 1934.136 * t;
+    l_deg -= 0.00569 + 0.00478 * (omega * dr).sin();
+    (l_deg % 360.0 + 360.0) % 360.0
+}
+
 
 /// Chỉ số 0..11 của "tháng thái dương" (khoảng 30° kinh độ Mặt Trời) tại trưa
 /// VN của ngày có JD nguyên `jdn` (= trưa UTC của ngày Dương).

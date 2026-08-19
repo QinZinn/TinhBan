@@ -33,6 +33,7 @@ use std::f64::consts::PI;
 mod astronomy;
 mod canchi;
 mod error;
+pub mod bat_tu;
 pub mod tuvi;
 
 pub use canchi::{EarthlyBranch, HeavenlyStem, NguHanh, NguHanhElement};
@@ -44,6 +45,13 @@ pub use canchi::{can_chi_display, nguhanh_of_branch, nguhanh_of_stem};
 pub use tuvi::{
     lap_la_so, Cuc, CucInfo, Gender, Palace, PalaceName, Sao, SaoCategory,
     TruongSinhState, TuViChart, TuViError,
+};
+
+// Bát Tự re-exports cho ergonomic API. Lưu ý `Gender` ở đây là cùng enum với
+// `tuvi::Gender` (re-export từ `crate::tuvi::Gender`); không tái-export ở
+// `pub use bat_tu::Gender` để tránh ambiguity.
+pub use bat_tu::{
+    lap_bat_tu, BatTuChart, BatTuError, NguHanhCount, Pillar, TenGod,
 };
 
 // ===========================================================================
