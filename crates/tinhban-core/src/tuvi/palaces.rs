@@ -10,6 +10,7 @@ use super::truong_sinh::TruongSinhState;
 /// Tên 12 cung theo thứ tự cố định Mệnh → Huynh Đệ (theo lasotuvi
 /// `cungChuThapNhiCung`). Index 0 = Mệnh, 11 = Huynh Đệ.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PalaceName {
     Menh = 0,
     PhuMau = 1,
@@ -62,6 +63,26 @@ impl PalaceName {
         }
     }
 
+    /// Slug ổn định dùng làm khoá tra từ điển và đường dẫn URL
+    /// (`/tu-dien/cung-menh`). Xem ghi chú ở [`crate::Sao::slug`] về việc vì sao
+    /// viết tay thay vì sinh từ tên hiển thị.
+    pub fn slug(self) -> &'static str {
+        match self {
+            Self::Menh => "cung-menh",
+            Self::PhuMau => "cung-phu-mau",
+            Self::PhucDuc => "cung-phuc-duc",
+            Self::DienTrach => "cung-dien-trach",
+            Self::QuanLoc => "cung-quan-loc",
+            Self::NoBoc => "cung-no-boc",
+            Self::ThienDi => "cung-thien-di",
+            Self::TatAch => "cung-tat-ach",
+            Self::TaiBach => "cung-tai-bach",
+            Self::TuTuc => "cung-tu-tuc",
+            Self::PhuThe => "cung-phu-the",
+            Self::HuynhDe => "cung-huynh-de",
+        }
+    }
+
     /// Index 0..11.
     pub fn index(self) -> u8 {
         self as u8
@@ -76,6 +97,7 @@ impl std::fmt::Display for PalaceName {
 
 /// Một cung trên bàn Tử Vi.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Palace {
     /// Tên cung (Mệnh, Phụ Mẫu, ...).
     pub name: PalaceName,

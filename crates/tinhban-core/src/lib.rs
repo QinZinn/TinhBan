@@ -109,6 +109,7 @@ pub struct CanChi {
 /// Ngày/giờ sinh dương lịch đầy đủ — input chung cho các giai đoạn sau
 /// (Tử Vi giai đoạn 3, Bát Tự giai đoạn 4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BirthMoment {
     pub solar_date: NaiveDate,
     /// 0–23 (giờ đồng hồ 24h, giờ Dương lịch).

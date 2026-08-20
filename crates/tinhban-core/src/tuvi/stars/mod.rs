@@ -14,6 +14,7 @@ pub mod phu_tinh;
 ///
 /// Derive `PartialEq, Eq, Hash` để có thể tra bằng btree/hash map nếu cần.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Sao {
     // === 14 chính tinh ===
     TuVi,
@@ -49,6 +50,7 @@ pub enum Sao {
 
 /// Phân loại sao.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SaoCategory {
     /// 14 chính tinh (Tử Vi + 6 sao chuỗi Bắc Đẩu + Thiên Phủ + 6 sao chuỗi
     /// Nam Đẩu-Phá Quân).
@@ -100,6 +102,62 @@ impl Sao {
             LinhTinh => "Linh Tinh",
             ThienMa => "Thiên Mã",
             DaoHoa => "Đào Hoa",
+        }
+    }
+}
+
+impl Sao {
+    /// Toàn bộ sao đã implement, theo thứ tự khai báo: 14 chính tinh rồi tới
+    /// phụ tinh.
+    ///
+    /// Dùng để sinh/kiểm tra dữ liệu từ điển — nếu thêm sao mới vào enum mà quên
+    /// viết mục từ điển, test `tu_dien` sẽ đỏ.
+    pub const ALL: [Sao; 27] = {
+        use Sao::*;
+        [
+            TuVi, ThienCo, ThaiDuong, VuKhuc, ThienDong, LiemTrinh, ThienPhu,
+            ThaiAm, ThamLang, CuMon, ThienTuong, ThienLuong, ThatSat, PhaQuan,
+            TaPhu, HuuBat, VanXuong, VanKhuc, ThienKhoi, ThienViet, LocTon,
+            KinhDuong, DaLa, HoaTinh, LinhTinh, ThienMa, DaoHoa,
+        ]
+    };
+
+    /// Slug ổn định dùng làm khoá tra từ điển và đường dẫn URL
+    /// (`/tu-dien/sao-tu-vi`).
+    ///
+    /// Cố ý viết tay thay vì sinh từ `name_vn()`: slug là **khoá dữ liệu**, đổi
+    /// slug sẽ làm hỏng link đã lưu, nên nó phải độc lập với việc chỉnh sửa tên
+    /// hiển thị.
+    pub fn slug(self) -> &'static str {
+        use Sao::*;
+        match self {
+            TuVi => "sao-tu-vi",
+            ThienCo => "sao-thien-co",
+            ThaiDuong => "sao-thai-duong",
+            VuKhuc => "sao-vu-khuc",
+            ThienDong => "sao-thien-dong",
+            LiemTrinh => "sao-liem-trinh",
+            ThienPhu => "sao-thien-phu",
+            ThaiAm => "sao-thai-am",
+            ThamLang => "sao-tham-lang",
+            CuMon => "sao-cu-mon",
+            ThienTuong => "sao-thien-tuong",
+            ThienLuong => "sao-thien-luong",
+            ThatSat => "sao-that-sat",
+            PhaQuan => "sao-pha-quan",
+            TaPhu => "sao-ta-phu",
+            HuuBat => "sao-huu-bat",
+            VanXuong => "sao-van-xuong",
+            VanKhuc => "sao-van-khuc",
+            ThienKhoi => "sao-thien-khoi",
+            ThienViet => "sao-thien-viet",
+            LocTon => "sao-loc-ton",
+            KinhDuong => "sao-kinh-duong",
+            DaLa => "sao-da-la",
+            HoaTinh => "sao-hoa-tinh",
+            LinhTinh => "sao-linh-tinh",
+            ThienMa => "sao-thien-ma",
+            DaoHoa => "sao-dao-hoa",
         }
     }
 }

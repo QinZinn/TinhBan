@@ -23,6 +23,7 @@ use crate::{EarthlyBranch, HeavenlyStem, NguHanh};
 
 /// Cục của lá số + thông tin metadata.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Cuc {
     /// Số Cục (2..6) dùng cho vòng Trường Sinh + an Tử Vi.
     pub so: u8,

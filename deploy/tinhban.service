@@ -8,26 +8,43 @@ Wants=network-online.target
 Type=simple
 
 # >>> CAN CHINH KHI DEPLOY <<<
-# Duong dan den binary release (ket qua `cargo build --release`).
-# Build len server (hoac tren may dev roi copy sang): chinh lai cho dung.
+# Duong dan den binary release (ket qua `cargo build --release -p tinhban-api`).
+# Day la file DUY NHAT can copy: migration SQL va toan bo noi dung tu dien
+# (content/tu-dien/) deu duoc nhung san vao binary luc build.
 ExecStart=/opt/tinhban/bin/tinhban-api
 
-# File environment tren server (KHONG commit vao repo). Chua: DATABASE_URL, PORT, IP, RUST_LOG.
+# File environment tren server (KHONG commit vao repo).
+# Chua: DATABASE_URL, PORT, IP, RUST_LOG. Xem deploy/README.md.
 EnvironmentFile=/etc/tinhban/tinhban.env
 
-# Neu muon chay duoi user rieng (de tranh chay root):
+# Chay duoi user rieng, khong phai root.
 #   sudo useradd -r -s /usr/sbin/nologin -d /var/lib/tinhban tinhban
-# roi bo comment cac dong duoi va chinh lon DATABASE_URL cho vao thu muc user do.
-# User=tinhban
-# Group=tinhban
-# WorkingDirectory=/var/lib/tinhban
-# ReadWritePaths=/var/lib/tinhban
+User=tinhban
+Group=tinhban
 
-# Gin gin: chi ghi vao noi luu DB, ra stdout (journald thu).
+# systemd tu tao /var/lib/tinhban (chown cho User o tren) va tu dong cho GHI vao
+# do ke ca khi ProtectSystem=strict. Dat DATABASE_URL tro vao thu muc nay:
+#   DATABASE_URL=sqlite:/var/lib/tinhban/tinhban.db?mode=rwc
+#
+# LUU Y: truoc day file nay dung ProtectSystem=strict ma KHONG khai bao thu muc
+# ghi duoc nao -> toan bo filesystem read-only -> SQLite khong tao noi file DB va
+# service chet ngay khi khoi dong. StateDirectory chinh la cach sua.
+StateDirectory=tinhban
+StateDirectoryMode=0750
+WorkingDirectory=/var/lib/tinhban
+
+# Gioi han quyen: chi ghi duoc vao StateDirectory, log ra journald.
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+# App chi can TCP/IP thong thuong (bind localhost + goi HTTPS ra licham365.vn).
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
 StandardOutput=journal
 StandardError=journal
 

@@ -24,6 +24,7 @@ use crate::{HeavenlyStem, NguHanh};
 
 /// 10 Thập Thần. Tên tiếng Việt theo chuẩn hoá trong spec giai đoạn 4.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TenGod {
     TyKien,       // Tỷ Kiên
     KiepTai,      // Kiếp Tài

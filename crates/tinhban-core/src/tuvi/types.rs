@@ -11,6 +11,7 @@ use super::Cuc;
 /// Giới tính của người được xem. Về chiều "âm dương thuận nghịch" trong các quy
 /// tắc an sao (Hỏa-Linh, Trường Sinh, Đại/Tiểu hạn), Nam = +1, Nữ = -1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Gender {
     Nam,
     Nu,
@@ -42,6 +43,7 @@ impl std::fmt::Display for Gender {
 
 /// Lá số Tử Vi Đẩu Số đầy đủ sau khi [`crate::tuvi::lap_la_so`].
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TuViChart {
     /// Ngày giờ sinh Dương lịch gốc.
     pub birth: BirthMoment,

@@ -1,152 +1,132 @@
 //! Tinh Bàn — server binary.
 //!
-//! Kiến trúc frontend: dùng **Dioxus fullstack ở chế độ SSR-only** (không build
-//! client/wasm). Lý do chọn + cách bật thêm client hydration sau xem trong
-//! `README.md` ở gốc repo. Nhờ SSR-only:
-//!  - chỉ 1 binary native, không cần `wasm32-unknown-unknown` target hay `dx` CLI
-//!    để `cargo build`/`cargo run`.
-//!  - frontend chạy chung server với Axum → đúng 1 service systemd.
+//! # Kiến trúc
 //!
-//! Endpoints (ngoài SSR homepage ở `/`):
-//!  - `GET /health`        -> `{"status":"ok"}`        (healthcheck cho systemd)
-//!  - `GET /api/health`    -> chi tiết + check DB       (server fn, frontend gọi)
-//!  - `GET /api/version`   -> `{"name","version"}`
-//!  - `GET /api/ngay-tot-xau?date=YYYY-MM-DD` -> ngày tốt/xấu (giai đoạn 5)
+//! **SSR thuần, không JavaScript.** Trang được dựng sẵn ở server bằng `rsx!` rồi
+//! render ra chuỗi HTML (`dioxus::ssr::render_element`); form gửi bằng POST
+//! thường và server trả redirect 303 (Post/Redirect/Get). Không có wasm, không
+//! hydration, không server function — nên `cargo build` là đủ, không cần `dx`
+//! CLI hay target `wasm32-unknown-unknown`.
 //!
-//! PORT/IP bind do Dioxus (`dioxus::serve`) đọc từ môi trường; mặc định 8080.
+//! Dioxus ở đây đóng vai **thư viện template** (`rsx!`) chứ không phải framework
+//! frontend; phần phục vụ HTTP là Axum thuần.
+//!
+//! # Route
+//!
+//! Trang HTML:
+//!  - `GET  /`                    trang chủ
+//!  - `GET  /la-so/moi`           form lập lá số
+//!  - `POST /la-so/moi`           lập + lưu, redirect sang hồ sơ vừa tạo
+//!  - `GET  /ho-so`               danh sách hồ sơ
+//!  - `GET  /ho-so/:id`           chi tiết + lá số Tử Vi & Bát Tự
+//!  - `POST /ho-so/:id/sua`       sửa tên / ghi chú
+//!  - `POST /ho-so/:id/xoa`       xoá
+//!  - `GET  /tu-dien?q=`          tra cứu từ điển
+//!  - `GET  /tu-dien/:slug`       chi tiết một mục
+//!  - `GET  /ngay-tot-xau?date=`  xem ngày tốt/xấu
+//!
+//! API JSON:
+//!  - `GET    /health`, `GET /api/health`, `GET /api/version`
+//!  - `GET    /api/tu-dien?q=`, `GET /api/tu-dien/:slug`
+//!  - `POST   /api/ho-so`, `GET /api/ho-so`, `GET /api/ho-so/:id`,
+//!    `PATCH /api/ho-so/:id`, `DELETE /api/ho-so/:id`
+//!  - `GET    /api/ngay-tot-xau?date=`
+//!
+//! PORT/IP đọc từ môi trường qua `dioxus::serve`; mặc định 8080.
 
-use dioxus::prelude::*;
-use serde::{Deserialize, Serialize};
-use tinhban_core::{app_name, version};
-
-#[cfg(feature = "server")]
-mod ngay_tot_xau;
-#[cfg(feature = "server")]
-mod scrape;
-
-#[cfg(feature = "server")]
 use dioxus::fullstack::Lazy;
 
-/// Pool SQLite dùng chung cả server (lazy init chạy + migrate ở lần truy cập đầu).
-/// `Lazy` block thread cho tới khi init xong; nếu init lỗi, app fail-to-start và
-/// systemd `Restart=on-failure` lo việc thử lại.
-#[cfg(feature = "server")]
+mod ho_so;
+mod ngay_tot_xau;
+mod routes;
+mod scrape;
+mod tu_dien;
+mod ui;
+
+/// Pool SQLite dùng chung. Lazy init: mở kết nối, chạy migration, rồi nạp từ
+/// điển từ nội dung nhúng trong binary.
+///
+/// Nếu bước nào hỏng thì app fail-to-start và systemd `Restart=on-failure` lo
+/// việc thử lại — thà không khởi động còn hơn chạy với DB nửa vời.
 static DB: Lazy<sqlx::SqlitePool> = Lazy::new(|| async move {
     let url = tinhban_db::default_database_url();
-    tracing::info!("initializing database: {url}");
+    tracing::info!("khởi tạo database: {url}");
     let pool = tinhban_db::init_and_migrate(&url).await?;
-    tracing::info!("database ready");
+    tracing::info!("migration xong");
+
+    match tu_dien::nap_vao_db(&pool).await {
+        Ok(n) => tracing::info!("từ điển: nạp {n} mục"),
+        // Từ điển hỏng không nên chặn cả app — các tính năng khác vẫn dùng được.
+        Err(e) => tracing::error!(error = %e, "nạp từ điển thất bại, trang từ điển sẽ trống"),
+    }
     Ok::<sqlx::SqlitePool, sqlx::Error>(pool)
 });
 
-/// HTTP client dùng chung cho scrape. Tạo một lần để tái dùng connection pool
-/// + DNS cache; tạo mới mỗi request là lãng phí và dễ cạn socket.
-#[cfg(feature = "server")]
-static HTTP: Lazy<reqwest::Client> = Lazy::new(|| async move {
-    scrape::licham365::build_client()
-});
-
-// PartialEq + Deserialize cần cho codec server fn + `use_loader`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-struct HealthStatus {
-    status: String,
-    db: String,
-    version: String,
-    app: String,
-}
-
-/// `GET /api/health` — server fn (tự đăng ký route + callable trong component).
-#[get("/api/health")]
-async fn get_health() -> Result<HealthStatus, HttpError> {
-    let db_ok = sqlx::query("SELECT 1")
-        .execute(&*DB)
-        .await
-        .is_ok();
-    Ok(HealthStatus {
-        status: "ok".to_string(),
-        db: if db_ok { "ok" } else { "fail" }.to_string(),
-        version: version().to_string(),
-        app: app_name().to_string(),
-    })
-}
-
-/// Trang chủ: SSR-render tên app + trạng thái backend (gọi `/api/health`).
-#[component]
-fn Home() -> Element {
-    let health = use_loader(get_health)?.read().clone();
-
-    rsx! {
-        div { style: "font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 1rem;",
-            h1 { "{app_name()}" }
-            p { "Toolkit tử vi cá nhân — self-hosted." }
-
-            hr {}
-
-            h2 { "Trạng thái backend" }
-            ul {
-                li { "API health: {health.status}" }
-                li { "Database: {health.db}" }
-                li { "Version: {health.version} ({health.app})" }
-            }
-
-            p { style: "color:#666; font-size:0.9rem;",
-                "Endpoints: GET /health · GET /api/health · GET /api/version · GET /api/ngay-tot-xau?date=YYYY-MM-DD"
-            }
-        }
-    }
-}
-
-fn app() -> Element {
-    rsx! { Home {} }
-}
+/// HTTP client dùng chung cho scrape licham365 (tái dùng connection pool + DNS
+/// cache thay vì tạo mới mỗi request).
+static HTTP: Lazy<reqwest::Client> = Lazy::new(|| async move { scrape::licham365::build_client() });
 
 fn main() {
-    #[cfg(feature = "server")]
-    {
-        // `.env` chỉ tiện cho dev local. Trên server systemd dựng qua EnvironmentFile.
-        let _ = dotenvy::dotenv();
+    // `.env` chỉ tiện cho dev local; trên server systemd nạp qua EnvironmentFile.
+    let _ = dotenvy::dotenv();
 
-        // SSR-only không có `dx` bundle, nên `dioxus-server` sẽ panic khi đọc thư
-        // mục mặc định `<exe>/public` (không tồn tại). Trỏ vào thư mục `public`
-        // rỗng của crate (commit cùng repo) khi env chưa đặt. Trên deploy có thể
-        // override `DIOXUS_PUBLIC_PATH` trong EnvironmentFile.
-        if std::env::var("DIOXUS_PUBLIC_PATH").is_err() {
-            std::env::set_var(
-                "DIOXUS_PUBLIC_PATH",
-                concat!(env!("CARGO_MANIFEST_DIR"), "/public"),
-            );
-        }
-
-        // Logging ra stdout (journald tự thu). `try_init` để không panic nếu Dioxus
-        // cũng cài subscriber — nhưng vì gọi trước `dioxus::serve`, subscriber này
-        // được đăng ký trước và thắng default format.
-        use tracing_subscriber::{EnvFilter, fmt};
-        let _ = fmt()
-            .with_env_filter(
-                EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| EnvFilter::new("info,tower_http=info")),
-            )
-            .with_target(false)
-            .try_init();
-
-        tracing::info!("starting {} v{}", app_name(), version());
+    // `dioxus::serve` đọc thư mục file tĩnh khi khởi động. App này không có asset
+    // nào (CSS nhúng thẳng trong `<head>`), nhưng thư mục vẫn phải tồn tại nếu
+    // không sẽ panic — trỏ vào thư mục `public/` rỗng commit kèm repo.
+    if std::env::var("DIOXUS_PUBLIC_PATH").is_err() {
+        std::env::set_var(
+            "DIOXUS_PUBLIC_PATH",
+            concat!(env!("CARGO_MANIFEST_DIR"), "/public"),
+        );
     }
 
-    #[cfg(not(feature = "server"))]
-    dioxus::launch(app);
+    use tracing_subscriber::{fmt, EnvFilter};
+    let _ = fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("info,tower_http=info")),
+        )
+        .with_target(false)
+        .try_init();
 
-    #[cfg(feature = "server")]
+    tracing::info!(
+        "khởi động {} v{}",
+        tinhban_core::app_name(),
+        tinhban_core::version()
+    );
+
     dioxus::serve(|| async move {
-        use dioxus::server::axum::routing::get;
+        use dioxus::server::axum::routing::{delete, get, patch, post};
+        use dioxus::server::axum::Router;
         use tower_http::cors::CorsLayer;
         use tower_http::trace::TraceLayer;
 
-        // CORS cấu hình permissive CỐ Ý: app chỉ chạy nội bộ qua Tailscale cho 1
-        // người dùng, không expose ra public internet. Xem README mục thiết kế.
-        // TraceLayer log request ra tracing -> journalctl thấy được traffic.
-        let router = dioxus::server::router(app)
+        // CORS permissive CỐ Ý: app chỉ chạy nội bộ trong tailnet cho đúng một
+        // người dùng, không expose ra internet công cộng. Xem README.
+        let router = Router::new()
+            // --- Trang HTML
+            .route("/", get(routes::trang_chu))
+            .route("/la-so/moi", get(routes::form_la_so).post(routes::tao_la_so))
+            .route("/ho-so", get(routes::danh_sach_ho_so))
+            .route("/ho-so/{id}", get(routes::chi_tiet_ho_so))
+            .route("/ho-so/{id}/sua", post(routes::sua_ho_so))
+            .route("/ho-so/{id}/xoa", post(routes::xoa_ho_so))
+            .route("/tu-dien", get(routes::trang_tu_dien))
+            .route("/tu-dien/{slug}", get(routes::chi_tiet_tu_dien))
+            .route("/ngay-tot-xau", get(routes::trang_ngay_tot_xau))
+            // --- API JSON
             .route("/health", get(health_handler))
+            .route("/api/health", get(api_health_handler))
             .route("/api/version", get(version_handler))
+            .route("/api/tu-dien", get(routes::api_tu_dien))
+            .route("/api/tu-dien/{slug}", get(routes::api_tu_dien_chi_tiet))
+            .route(
+                "/api/ho-so",
+                get(routes::api_danh_sach_ho_so).post(routes::api_tao_ho_so),
+            )
+            .route("/api/ho-so/{id}", get(routes::api_chi_tiet_ho_so))
+            .route("/api/ho-so/{id}", patch(routes::api_sua_ho_so))
+            .route("/api/ho-so/{id}", delete(routes::api_xoa_ho_so))
             .route("/api/ngay-tot-xau", get(ngay_tot_xau_handler))
             .layer(TraceLayer::new_for_http())
             .layer(CorsLayer::very_permissive());
@@ -155,12 +135,27 @@ fn main() {
     });
 }
 
-#[cfg(feature = "server")]
+// ===========================================================================
+// Handler nhỏ
+// ===========================================================================
+
 async fn health_handler() -> dioxus::server::axum::Json<serde_json::Value> {
     dioxus::server::axum::Json(serde_json::json!({ "status": "ok" }))
 }
 
-#[cfg(feature = "server")]
+/// Healthcheck chi tiết: có chạm DB thật nên phát hiện được DB hỏng.
+async fn api_health_handler() -> dioxus::server::axum::Json<serde_json::Value> {
+    let db_ok = sqlx::query("SELECT 1").execute(&*DB).await.is_ok();
+    let so_muc = tinhban_db::tat_ca_tu_dien(&DB).await.map(|v| v.len()).unwrap_or(0);
+    dioxus::server::axum::Json(serde_json::json!({
+        "status": "ok",
+        "db": if db_ok { "ok" } else { "fail" },
+        "tu_dien_muc": so_muc,
+        "version": tinhban_core::version(),
+        "app": tinhban_core::app_name(),
+    }))
+}
+
 async fn version_handler() -> dioxus::server::axum::Json<serde_json::Value> {
     dioxus::server::axum::Json(serde_json::json!({
         "name": tinhban_core::app_name(),
@@ -168,22 +163,12 @@ async fn version_handler() -> dioxus::server::axum::Json<serde_json::Value> {
     }))
 }
 
-/// `GET /api/ngay-tot-xau?date=YYYY-MM-DD`
+/// `GET /api/ngay-tot-xau?date=YYYY-MM-DD` — giữ nguyên hợp đồng từ giai đoạn 5.
 ///
-/// `date` không bắt buộc — thiếu thì lấy **hôm nay theo giờ Việt Nam** (không
-/// phải giờ hệ thống: server có thể chạy UTC, nhưng lịch âm luôn tính theo UTC+7).
-///
-/// Mã trạng thái:
-///  - `200` — thành công (kể cả khi phần diễn giải scrape hỏng: khi đó
-///    `dien_giai` là `null` và `ghi_chu` giải thích lý do);
-///  - `400` — `date` sai định dạng hoặc ngoài phạm vi 1900–2100.
-///
-/// Nguồn phụ hỏng KHÔNG bao giờ thành 5xx — đó là chủ ý thiết kế.
-#[cfg(feature = "server")]
+/// Thiếu `date` → hôm nay theo giờ VN. `200` kể cả khi scrape hỏng (khi đó
+/// `dien_giai` là `null` kèm `ghi_chu`); `400` khi `date` sai hoặc ngoài phạm vi.
 async fn ngay_tot_xau_handler(
-    dioxus::server::axum::extract::Query(q): dioxus::server::axum::extract::Query<
-        NgayTotXauQuery,
-    >,
+    dioxus::server::axum::extract::Query(q): dioxus::server::axum::extract::Query<NgayTotXauQuery>,
 ) -> Result<
     dioxus::server::axum::Json<ngay_tot_xau::NgayTotXauResponse>,
     (
@@ -194,33 +179,21 @@ async fn ngay_tot_xau_handler(
     use dioxus::server::axum::http::StatusCode;
     use dioxus::server::axum::Json;
 
-    let bad = |msg: String| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({ "error": msg })),
-        )
-    };
+    let bad = |msg: String| (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": msg })));
 
     let date = match q.date.as_deref() {
-        Some(s) => chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|_| {
-            bad(format!(
-                "tham số `date` không hợp lệ: {s:?} — cần định dạng YYYY-MM-DD"
-            ))
-        })?,
-        // Hôm nay theo giờ VN (UTC+7), không theo timezone của máy chủ.
+        Some(s) => chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
+            .map_err(|_| bad(format!("tham số `date` không hợp lệ: {s:?} — cần YYYY-MM-DD")))?,
         None => (chrono::Utc::now() + chrono::Duration::hours(7)).date_naive(),
     };
 
-    match ngay_tot_xau::xem_ngay(&DB, &HTTP, date).await {
-        Ok(r) => Ok(Json(r)),
-        Err(e) => Err(bad(e.to_string())),
-    }
+    ngay_tot_xau::xem_ngay(&DB, &HTTP, date)
+        .await
+        .map(Json)
+        .map_err(|e| bad(e.to_string()))
 }
 
-/// Query string của `/api/ngay-tot-xau`.
-#[cfg(feature = "server")]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 struct NgayTotXauQuery {
-    /// `YYYY-MM-DD`. Thiếu → hôm nay theo giờ VN.
     date: Option<String>,
 }

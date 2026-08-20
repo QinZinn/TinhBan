@@ -44,6 +44,12 @@ reqwest = { version = "0.12", default-features = false, features = [
 ] }
 scraper = "0.20"
 
+# Nhúng `content/tu-dien/` vào binary để deploy chỉ cần copy 1 file.
+include_dir = "0.7"
+
+# Render markdown của từ điển ra HTML.
+pulldown-cmark = { version = "0.12", default-features = false, features = ["html"] }
+
 # Release profile tuned for a low-resource homeserver single-binary deployment.
 [profile.release]
 opt-level = 2

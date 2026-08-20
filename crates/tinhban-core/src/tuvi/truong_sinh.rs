@@ -16,6 +16,7 @@ use crate::EarthlyBranch;
 
 /// 12 state của vòng Trường Sinh, theo thứ tự chuẩn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TruongSinhState {
     TruongSinh = 0,
     MocDuc = 1,

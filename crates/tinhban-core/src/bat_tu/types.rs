@@ -9,6 +9,7 @@ pub use crate::tuvi::Gender;
 
 /// Một trụ (Pillar) trong lá số Bát Tự: Can + Chi + Thập Thần + Tàng Can.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Pillar {
     /// Cặp Can-Chi của trụ (4 trụ: năm, tháng, ngày, giờ).
     pub can_chi: CanChi,
@@ -35,6 +36,7 @@ impl Pillar {
 
 /// Lá số Bát Tự đầy đủ (Tứ Trụ + thống kê + Thập Thần).
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BatTuChart {
     /// Ngày giờ sinh Dương lịch gốc.
     pub birth: BirthMoment,
@@ -57,6 +59,7 @@ pub struct BatTuChart {
 
 /// Số lần xuất hiện mỗi hành trong 8 chữ.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NguHanhCount {
     pub kim: u8,
     pub moc: u8,
